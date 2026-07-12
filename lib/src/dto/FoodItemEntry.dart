@@ -70,6 +70,20 @@ double evaluateFoodItemWithCommentAndSymbols(String calorieExpression, List<Cust
   }
 }
 
+({double result, int commentIndex}) evaluateFoodItemWithCommentIndexAndSymbols(
+    String calorieExpression, List<CustomSymbolEntry> userSymbols) {
+  if (calorieExpression.isEmpty) {
+    return (result: 0, commentIndex: -1);
+  }
+  try {
+    calorieExpression = calorieExpression.replaceAll(",", "+");
+    final (:result, :commentIndex) = parseWithUserSymbolsAndCommentIndex(calorieExpression, userSymbols);
+    return result.isFinite ? (result: result, commentIndex: commentIndex) : (result: 0, commentIndex: -1);
+  } catch (e) {
+    return (result: 0, commentIndex: -1);
+  }
+}
+
 Future<double> evaluateFoodItemWithCommentAndSymbolsAsync(String calorieExpression) async {
   final List<CustomSymbolEntry> userSymbols = await DatabaseHelper.instance.getAllUserSymbols();
   return evaluateFoodItemWithCommentAndSymbols(calorieExpression, userSymbols);

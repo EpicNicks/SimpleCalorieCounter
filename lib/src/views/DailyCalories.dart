@@ -22,6 +22,14 @@ class Entry {
   }
 }
 
+class _CachedExpression {
+  String expression;
+  int commentIndex;
+  double calories;
+
+  _CachedExpression({required this.expression, required this.commentIndex, required this.calories});
+}
+
 class DailyCaloriesPage extends StatefulWidget {
   final void Function(int dailyCalories) setDailyCalories;
   final DateTime dateCurrentlyEditing;
@@ -39,12 +47,25 @@ class _DailyCaloriesPageState extends State<DailyCaloriesPage> with WidgetsBindi
 
   DateTime get currentDateEditing => widget.dateCurrentlyEditing;
 
+  final Map<int, _CachedExpression> cachedExpressions = Map();
+
+  _CachedExpression evaluateExpression(FoodItemEntry entry, List<CustomSymbolEntry> userSymbols) {
+    if (cachedExpressions.containsKey(entry.id) && entry.calorieExpression == cachedExpressions[entry.id]!.expression) {
+      return cachedExpressions[entry.id]!;
+    } else {
+      final (:result, :commentIndex) = evaluateFoodItemWithCommentIndexAndSymbols(entry.calorieExpression, userSymbols);
+      cachedExpressions[entry.id!] =
+          _CachedExpression(expression: entry.calorieExpression, commentIndex: commentIndex, calories: result);
+      return cachedExpressions[entry.id]!;
+    }
+  }
+
   Future<void> loadItems() async {
     final List<FoodItemEntry> foodItemEntries = await DatabaseHelper.instance.getFoodItems(currentDateEditing.dateOnly);
     final List<CustomSymbolEntry> userSymbols = await DatabaseHelper.instance.getAllUserSymbols();
     final getLabelText = (FoodItemEntry e) {
       if (e.calorieExpression != "" && double.tryParse(e.calorieExpression) == null) {
-        return "= " + evaluateFoodItemWithCommentAndSymbols(e.calorieExpression, userSymbols).round().toString();
+        return "= " + evaluateExpression(e, userSymbols).calories.round().toString();
       }
       return "";
     };
@@ -58,7 +79,10 @@ class _DailyCaloriesPageState extends State<DailyCaloriesPage> with WidgetsBindi
             loadItems();
           }
         });
-        final controller = SymbolBoldingTextEditingController(userSymbols: userSymbols)..text = e.calorieExpression;
+        final controller = SymbolBoldingTextEditingController(
+            userSymbols: userSymbols, commentIndex: evaluateExpression(e, userSymbols).commentIndex)
+          ..text = e.calorieExpression;
+        final labelText = getLabelText(e);
         return Entry(
           controller: controller,
           dbId: e.id!,
@@ -66,7 +90,7 @@ class _DailyCaloriesPageState extends State<DailyCaloriesPage> with WidgetsBindi
             controller: controller,
             cursorColor: Colors.black,
             decoration: InputDecoration(
-              label: getLabelText(e) != ""
+              label: labelText != ""
                   ? Container(
                       decoration: BoxDecoration(
                           color: ORANGE_FRUIT,
@@ -74,10 +98,10 @@ class _DailyCaloriesPageState extends State<DailyCaloriesPage> with WidgetsBindi
                           borderRadius: BorderRadius.all(Radius.circular(20))),
                       child: Padding(
                           padding: EdgeInsets.only(left: 10, right: 10),
-                          child: Text(getLabelText(e), style: TextStyle(color: Theme.of(context).colorScheme.primary))),
+                          child: Text(labelText, style: TextStyle(color: Theme.of(context).colorScheme.primary))),
                     )
                   : null,
-              //labelText: getLabelText(e),
+              //labelText: labelText,
               enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueGrey)),
               border: OutlineInputBorder(borderSide: BorderSide(color: Colors.blueGrey)),
               focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.black)),
@@ -160,8 +184,9 @@ class _DailyCaloriesPageState extends State<DailyCaloriesPage> with WidgetsBindi
 
   Future<int> totalCalories() async {
     int total = 0;
+    final userSymbols = await DatabaseHelper.instance.getAllUserSymbols();
     for (var item in entries) {
-      total += (await evaluateFoodItemWithCommentAndSymbolsAsync(item.controller.text)).round();
+      total += evaluateFoodItemWithCommentAndSymbols(item.controller.text, userSymbols).round();
     }
     return total;
   }

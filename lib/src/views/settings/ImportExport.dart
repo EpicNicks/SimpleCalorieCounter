@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:calorie_tracker/generated/l10n/app_localizations.dart';
 import 'package:calorie_tracker/src/constants/ColorConstants.dart';
-import 'package:calorie_tracker/src/helpers/DatabaseHelper.dart';
 import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../dto/FoodItemEntry.dart';
+import '../../helpers/DatabaseHelper.dart';
 
 class ImportExport extends StatefulWidget {
   const ImportExport({super.key});
@@ -31,7 +31,7 @@ class _ImportExportState extends State<ImportExport> {
 
   /// shows localized overwrite dialogs using [context], return value is only logged so no need to translate
   static Future<({String message, bool success})> uploadCsv(BuildContext context) async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    FilePickerResult? result = await FilePicker.pickFiles(
         dialogTitle: "Select your backup file", type: FileType.custom, withData: true, allowedExtensions: ["csv"]);
     if (result != null) {
       try {
@@ -83,7 +83,7 @@ class _ImportExportState extends State<ImportExport> {
                                         onPressed: () async {
                                           // overwrite data (validate data, purge db table, write data)
                                           String csvString = utf8.decode(file.bytes!);
-                                          final List<List<dynamic>> csvData = CsvToListConverter().convert(csvString);
+                                          final List<List<dynamic>> csvData = Csv().decode(csvString);
                                           // confirm all rows are valid
                                           for (final row in csvData) {
                                             if (row.length != 3) {
@@ -154,7 +154,7 @@ class _ImportExportState extends State<ImportExport> {
     });
     final DatabaseHelper db = await DatabaseHelper.instance;
     final List<List<dynamic>> csvRows = await db.getAllFoodItemsAsCsvRows();
-    final String csvString = ListToCsvConverter().convert(csvRows);
+    final String csvString = Csv().encode(csvRows);
     ({String? message, bool success}) result = await downloadCsv(csvString);
     if (result.success) {
       setState(() {

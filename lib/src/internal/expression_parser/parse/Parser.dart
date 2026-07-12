@@ -59,6 +59,25 @@ double parseWithUserSymbols(String input, List<CustomSymbolEntry> userSymbols) {
   }
 }
 
+({double result, int commentIndex}) parseWithUserSymbolsAndCommentIndex(
+    String input, List<CustomSymbolEntry> userSymbols) {
+  try {
+    List<Token> resolvedTokens = _resolveSymbolsWithCommentsToInput(tokenize(input), userSymbols);
+    int firstInvalidIndex = resolvedTokens.indexWhere((token) => token is InvalidToken);
+    int commentIndex = -1;
+    if (firstInvalidIndex != -1) {
+      InvalidToken firstInvalidToken = resolvedTokens[firstInvalidIndex] as InvalidToken;
+      resolvedTokens = resolvedTokens.sublist(0, firstInvalidIndex);
+      commentIndex = firstInvalidToken.position;
+    }
+    final List<Token> rpnSolveList = _tokensToRpn(resolvedTokens);
+    final SolveResult solveResult = _shuntingYardSolve(rpnSolveList);
+    return (result: solveResult.value, commentIndex: commentIndex);
+  } catch (e) {
+    return (result: 0, commentIndex: -1);
+  }
+}
+
 List<Token> _resolveSymbolsWithCommentsToInput(List<Token> tokens, List<CustomSymbolEntry> userSymbols) {
   for (int i = 0; i < tokens.length; i++) {
     final Token curToken = tokens[i];
@@ -71,12 +90,19 @@ List<Token> _resolveSymbolsWithCommentsToInput(List<Token> tokens, List<CustomSy
           return tokens;
         }
         final List<Token> newTokenData = _resolveSymbolsToInput(tokenize(matchedCse.expression), userSymbols);
+
+        final bool needsLeadingMultiply =
+            i > 0 && (tokens[i - 1] is LiteralToken || tokens[i - 1] == OperatorToken.RPAREN);
+
         final List<Token> expandedTokens = [];
         expandedTokens.addAll(tokens.take(i));
+        if (needsLeadingMultiply) {
+          expandedTokens.add(OperatorToken.MULTIPLY);
+        }
         expandedTokens.add(OperatorToken.LPAREN);
         expandedTokens.addAll(newTokenData);
         expandedTokens.add(OperatorToken.RPAREN);
-        expandedTokens.addAll(tokens.skip(i + 1)); // Fixed: was i + 2
+        expandedTokens.addAll(tokens.skip(i + 1));
         tokens = expandedTokens;
         i--; // Reset index to reprocess from current position
       } catch (e) {
@@ -96,8 +122,15 @@ List<Token> _resolveSymbolsToInput(List<Token> tokens, List<CustomSymbolEntry> u
         final CustomSymbolEntry matchedCse = userSymbols.firstWhere((symbol) => symbol.name == curToken.invalidShard,
             orElse: () => throw ArgumentError('Symbol not found: ${curToken.invalidShard}'));
         final List<Token> newTokenData = _resolveSymbolsToInput(tokenize(matchedCse.expression), userSymbols);
+
+        final bool needsLeadingMultiply =
+            i > 0 && (tokens[i - 1] is LiteralToken || tokens[i - 1] == OperatorToken.RPAREN);
+
         final List<Token> expandedTokens = [];
         expandedTokens.addAll(tokens.take(i));
+        if (needsLeadingMultiply) {
+          expandedTokens.add(OperatorToken.MULTIPLY);
+        }
         expandedTokens.add(OperatorToken.LPAREN);
         expandedTokens.addAll(newTokenData);
         expandedTokens.add(OperatorToken.RPAREN);
